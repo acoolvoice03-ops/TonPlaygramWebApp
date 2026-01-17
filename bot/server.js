@@ -46,7 +46,6 @@ import { fileURLToPath } from 'url';
 import { existsSync, writeFileSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
-import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import {
   registerConnection,
@@ -137,7 +136,6 @@ bot.action(/^reject_invite:(.+)/, async (ctx) => {
 });
 
 // Middleware and routes
-app.use(compression());
 // Increase JSON body limit to handle large photo uploads
 app.use(express.json({ limit: '10mb' }));
 const apiLimiter = rateLimit({
@@ -159,7 +157,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/push', pushRoutes);
 if (process.env.ENABLE_TWITTER_OAUTH === 'true') {
   app.use('/api/twitter', twitterAuthRoutes);
-}
+           
 app.use('/api/airdrop', airdropRoutes);
 app.use('/api/checkin', checkinRoutes);
 app.use('/api/social', socialRoutes);
