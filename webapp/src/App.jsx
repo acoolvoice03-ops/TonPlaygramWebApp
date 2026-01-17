@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
+import { Analytics } from '@vercel/analytics/react';
 
 import Home from './pages/Home.jsx';
 import Mining from './pages/Mining.jsx';
@@ -148,6 +149,7 @@ export default function App() {
             <Route path="/nfts" element={<Nfts />} />
             <Route path="/magazine" element={<MagazineWarehouse />} />
           </Routes>
+          <Analytics />
         </Layout>
       </TonConnectUIProvider>
     </BrowserRouter>
