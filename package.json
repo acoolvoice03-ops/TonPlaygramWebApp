@@ -20,3 +20,9 @@
     "telegraf": "^4.16.0"
   }
 }
+{
+  "dependencies": {
+    "undici": "^6.6.0"
+  }
+}
+
