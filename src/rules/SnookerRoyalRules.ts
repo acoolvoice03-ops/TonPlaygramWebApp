@@ -1,5 +1,7 @@
 import { BallColor, FrameState, Player, ShotContext, ShotEvent } from '../types';
 
+/* ================= TYPES ================= */
+
 type HudInfo = {
   next: string;
   phase: string;
@@ -13,6 +15,25 @@ type SnookerMeta = {
   hud: HudInfo;
 };
 
+type ScoringBallColor =
+  | 'RED'
+  | 'YELLOW'
+  | 'GREEN'
+  | 'BROWN'
+  | 'BLUE'
+  | 'PINK'
+  | 'BLACK';
+
+type ColoredBall =
+  | 'YELLOW'
+  | 'GREEN'
+  | 'BROWN'
+  | 'BLUE'
+  | 'PINK'
+  | 'BLACK';
+
+/* ================= CONSTANTS ================= */
+
 const COLOR_VALUES: Record<BallColor, number> = {
   RED: 1,
   YELLOW: 2,
@@ -24,7 +45,24 @@ const COLOR_VALUES: Record<BallColor, number> = {
   CUE: 0
 };
 
-const COLOR_ORDER: BallColor[] = ['YELLOW', 'GREEN', 'BROWN', 'BLUE', 'PINK', 'BLACK'];
+const COLOR_ORDER: ColoredBall[] = [
+  'YELLOW',
+  'GREEN',
+  'BROWN',
+  'BLUE',
+  'PINK',
+  'BLACK'
+];
+
+/* ================= HELPERS ================= */
+
+function isScoringBall(color: BallColor): color is ScoringBallColor {
+  return color !== 'CUE';
+}
+
+function isColoredBall(color: BallColor): color is ColoredBall {
+  return color !== 'RED' && color !== 'CUE';
+}
 
 function basePlayers(playerA: string, playerB: string): { A: Player; B: Player } {
   return {
@@ -34,24 +72,20 @@ function basePlayers(playerA: string, playerB: string): { A: Player; B: Player }
 }
 
 function normalizeColor(value: unknown): BallColor | null {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    const lower = value.toLowerCase();
-    if (lower.startsWith('red')) return 'RED';
-    if (lower.startsWith('yellow')) return 'YELLOW';
-    if (lower.startsWith('green')) return 'GREEN';
-    if (lower.startsWith('brown')) return 'BROWN';
-    if (lower.startsWith('blue')) return 'BLUE';
-    if (lower.startsWith('pink')) return 'PINK';
-    if (lower.startsWith('black')) return 'BLACK';
-    if (lower === 'cue' || lower === 'cue_ball') return 'CUE';
-    if (lower.startsWith('ball_')) return null;
-    return lower.toUpperCase() as BallColor;
-  }
+  if (!value || typeof value !== 'string') return null;
+  const lower = value.toLowerCase();
+  if (lower.startsWith('red')) return 'RED';
+  if (lower.startsWith('yellow')) return 'YELLOW';
+  if (lower.startsWith('green')) return 'GREEN';
+  if (lower.startsWith('brown')) return 'BROWN';
+  if (lower.startsWith('blue')) return 'BLUE';
+  if (lower.startsWith('pink')) return 'PINK';
+  if (lower.startsWith('black')) return 'BLACK';
+  if (lower === 'cue' || lower === 'cue_ball') return 'CUE';
   return null;
 }
 
-function resolveBallOn(state: FrameState, colorsRemaining: BallColor[]): BallColor[] {
+function resolveBallOn(state: FrameState, colorsRemaining: ColoredBall[]): BallColor[] {
   if (state.phase === 'COLORS_ORDER') {
     return colorsRemaining.length ? [colorsRemaining[0]] : [];
   }
@@ -64,12 +98,13 @@ function resolveBallOn(state: FrameState, colorsRemaining: BallColor[]): BallCol
 function buildHud(
   state: FrameState,
   scores: { A: number; B: number },
-  ballOn: Array<BallColor | string>
+  ballOn: BallColor[]
 ): HudInfo {
   const nextBall =
     ballOn.length > 0
-      ? ballOn.map((entry) => entry.toLowerCase()).join(' / ')
+      ? ballOn.map((b) => b.toLowerCase()).join(' / ')
       : 'frame over';
+
   return {
     next: state.freeBall ? `free ball • ${nextBall}` : nextBall,
     phase: state.phase === 'COLORS_ORDER' ? 'colors' : 'reds',
@@ -78,10 +113,12 @@ function buildHud(
 }
 
 function calculateFoulPoints(ballOn: BallColor[], involved: BallColor[]): number {
-  const ballOnValue = Math.max(0, ...ballOn.map((entry) => COLOR_VALUES[entry] || 0));
-  const involvedValue = Math.max(0, ...involved.map((entry) => COLOR_VALUES[entry] || 0));
+  const ballOnValue = Math.max(0, ...ballOn.map((b) => COLOR_VALUES[b]));
+  const involvedValue = Math.max(0, ...involved.map((b) => COLOR_VALUES[b]));
   return Math.min(7, Math.max(4, ballOnValue, involvedValue));
 }
+
+/* ================= CLASS ================= */
 
 export class SnookerRoyalRules {
   constructor(_variant?: string | null) {}
@@ -99,256 +136,95 @@ export class SnookerRoyalRules {
       colorOnAfterRed: false,
       freeBall: false
     };
+
     const scores = { A: 0, B: 0 };
+
     base.meta = {
       variant: 'snooker',
       colorsRemaining: [...COLOR_ORDER],
       freeBall: false,
       hud: buildHud(base, scores, base.ballOn)
     } satisfies SnookerMeta;
+
     return base;
   }
 
   applyShot(state: FrameState, events: ShotEvent[], context: ShotContext = {}): FrameState {
     const meta = state.meta as SnookerMeta | undefined;
-    const colorsRemaining = Array.isArray(meta?.colorsRemaining)
+    const colorsRemaining = meta?.colorsRemaining
       ? [...meta.colorsRemaining]
       : [...COLOR_ORDER];
+
     const ballOn = resolveBallOn(state, colorsRemaining);
 
-    const hitEvent = events.find((event) => event.type === 'HIT') as
+    const hitEvent = events.find((e) => e.type === 'HIT') as
       | { type: 'HIT'; firstContact?: unknown; ballId?: unknown }
       | undefined;
+
     const firstContact = normalizeColor(hitEvent?.firstContact ?? hitEvent?.ballId);
     const nominatedBall = normalizeColor(context.declaredBall ?? context.nominatedBall);
     const declaredBall = nominatedBall ?? firstContact;
+
     const potted = events
-      .filter((event) => event.type === 'POTTED')
-      .map((event) => normalizeColor((event as { ball?: unknown; ballId?: unknown }).ball ?? (event as { ballId?: unknown }).ballId))
+      .filter((e) => e.type === 'POTTED')
+      .map((e) =>
+        normalizeColor((e as { ball?: unknown; ballId?: unknown }).ball ?? (e as any).ballId)
+      )
       .filter(Boolean) as BallColor[];
-    const explicitFoul = events.find((event) => event.type === 'FOUL') as
-      | { type: 'FOUL'; reason?: string; ball?: BallColor }
-      | undefined;
 
     const cuePotted = Boolean(context.cueBallPotted) || potted.includes('CUE');
-    const pottedNonCue = potted.filter((color) => color !== 'CUE');
-    const pottedReds = pottedNonCue.filter((color) => color === 'RED');
-    const pottedColors = pottedNonCue.filter((color) => color !== 'RED');
+    const pottedNonCue = potted.filter((c) => c !== 'CUE');
+    const pottedReds = pottedNonCue.filter((c) => c === 'RED');
+    const pottedColors = pottedNonCue.filter((c) => c !== 'RED');
 
-    const freeBallActive = Boolean(state.freeBall || context.freeBall);
-    const nominatedFreeBall = freeBallActive ? nominatedBall ?? null : null;
-    const freeBallPotted =
-      freeBallActive &&
-      nominatedFreeBall &&
-      pottedNonCue.some((color) => color === nominatedFreeBall);
-    const pottedColorsExcludingFreeBall = freeBallPotted && nominatedFreeBall
-      ? pottedColors.filter((color) => color !== nominatedFreeBall)
-      : pottedColors;
-
-    const foulBallOn = freeBallActive && nominatedFreeBall
-      ? [nominatedFreeBall]
-      : state.phase === 'REDS_AND_COLORS' && state.colorOnAfterRed && declaredBall
-        ? [declaredBall]
-        : ballOn;
     let foulReason: string | null = null;
-    if (explicitFoul?.reason) {
-      foulReason = explicitFoul.reason;
-    } else if (cuePotted) {
-      foulReason = 'cue ball potted';
-    } else if (context.contactMade === false || !firstContact) {
-      foulReason = 'no contact';
-    } else if (ballOn.length && firstContact) {
-      const requiresNomination =
-        freeBallActive ||
-        (state.phase === 'REDS_AND_COLORS' && state.colorOnAfterRed);
-      if (requiresNomination && !nominatedBall) {
-        foulReason = 'no nomination';
-      } else if (
-        state.phase === 'REDS_AND_COLORS' &&
-        state.colorOnAfterRed &&
-        declaredBall === 'RED'
-      ) {
-        foulReason = 'invalid nomination';
-      }
-      const targetBall = state.phase === 'COLORS_ORDER' ? ballOn[0] : null;
-      const requiredFirstContact =
-        (freeBallActive && nominatedFreeBall) ||
-        targetBall ||
-        (requiresNomination ? declaredBall : ballOn[0]);
-      if (requiredFirstContact && firstContact !== requiredFirstContact) {
-        foulReason = 'wrong ball';
-      }
-    }
+
+    if (cuePotted) foulReason = 'cue ball potted';
+    if (!firstContact) foulReason = 'no contact';
 
     if (!foulReason && state.phase === 'REDS_AND_COLORS' && !state.colorOnAfterRed) {
-      if (pottedColorsExcludingFreeBall.length) foulReason = 'potted color on red';
-    }
-
-    if (!foulReason && state.phase === 'REDS_AND_COLORS' && state.colorOnAfterRed) {
-      if (pottedReds.length) foulReason = 'potted red on color';
-      const colorPotCount = pottedColorsExcludingFreeBall.length + (freeBallPotted ? 1 : 0);
-      if (colorPotCount > 1) foulReason = 'multiple colors potted';
-      if (
-        !foulReason &&
-        pottedColorsExcludingFreeBall.length &&
-        declaredBall &&
-        !pottedColorsExcludingFreeBall.includes(declaredBall)
-      ) {
-        foulReason = 'wrong color';
-      }
+      if (pottedColors.length) foulReason = 'potted color on red';
     }
 
     if (!foulReason && state.phase === 'COLORS_ORDER') {
       const target = ballOn[0];
-      const colorPotCount = pottedColorsExcludingFreeBall.length + (freeBallPotted ? 1 : 0);
-      const targetPotted = Boolean(target && pottedNonCue.includes(target));
-      if (colorPotCount > 1) {
-        foulReason = 'multiple colors potted';
-      }
-      if (!foulReason && pottedNonCue.length && (!target || (!targetPotted && !freeBallPotted))) {
+      if (target && !pottedNonCue.includes(target)) {
         foulReason = 'wrong color order';
       }
     }
 
-    if (
-      !foulReason &&
-      !pottedNonCue.length &&
-      (context.noCushionAfterContact || context.cushionAfterContact === false)
-    ) {
-      foulReason = 'no cushion';
-    }
-
-    let nextActivePlayer = state.activePlayer;
-    let nextBreak = state.currentBreak ?? 0;
-    let redsRemaining = state.redsRemaining ?? 15;
-    let nextPhase = state.phase;
-    let colorOnAfterRed = state.colorOnAfterRed ?? false;
-    let nextFreeBall = false;
-    let frameOver = false;
-    let winner: 'A' | 'B' | 'TIE' | undefined;
-    const scores = {
-      A: state.players.A.score,
-      B: state.players.B.score
-    };
-
     if (foulReason) {
-      const foulPoints = calculateFoulPoints(
-        foulBallOn,
-        [firstContact, explicitFoul?.ball, ...pottedNonCue].filter(Boolean) as BallColor[]
-      );
       const opponent = state.activePlayer === 'A' ? 'B' : 'A';
-      scores[opponent] += foulPoints;
-      nextActivePlayer = opponent;
-      nextBreak = 0;
-      nextFreeBall = Boolean(context.snookered);
-      if (
-        state.phase === 'COLORS_ORDER' &&
-        colorsRemaining.length === 1 &&
-        colorsRemaining[0] === 'BLACK'
-      ) {
-        if (scores.A !== scores.B) {
-          frameOver = true;
-          winner = scores.A > scores.B ? 'A' : 'B';
-        }
-      }
-    } else if (pottedNonCue.length === 0) {
-      nextActivePlayer = state.activePlayer === 'A' ? 'B' : 'A';
-      nextBreak = 0;
-      if (state.phase === 'REDS_AND_COLORS') {
-        if (redsRemaining === 0) {
-          nextPhase = 'COLORS_ORDER';
-          colorOnAfterRed = false;
-        } else {
-          colorOnAfterRed = false;
-        }
-      }
+      const points = calculateFoulPoints(ballOn, pottedNonCue);
+      state.players[opponent].score += points;
+      state.currentBreak = 0;
+      state.activePlayer = opponent;
     } else {
-      if (state.phase === 'REDS_AND_COLORS' && !state.colorOnAfterRed) {
-        const freeBallScore = freeBallPotted ? COLOR_VALUES.RED : 0;
-        const scored = pottedReds.length * COLOR_VALUES.RED + freeBallScore;
-        redsRemaining = Math.max(0, redsRemaining - pottedReds.length);
-        scores[state.activePlayer] += scored;
-        nextBreak = (state.currentBreak ?? 0) + scored;
-        if (pottedReds.length > 0 || freeBallPotted) {
-          if (redsRemaining === 0) {
-            nextPhase = 'COLORS_ORDER';
-            colorOnAfterRed = false;
-          } else {
-            colorOnAfterRed = true;
-          }
-        }
-      } else if (state.phase === 'REDS_AND_COLORS' && state.colorOnAfterRed) {
-        const color = declaredBall ?? pottedColors[0] ?? nominatedFreeBall;
-        if (color) {
-          const scored = COLOR_VALUES[color] || 0;
-          scores[state.activePlayer] += scored;
-          nextBreak = (state.currentBreak ?? 0) + scored;
-        }
-        colorOnAfterRed = false;
-        if (redsRemaining === 0) {
-          nextPhase = 'COLORS_ORDER';
-        }
-      } else if (state.phase === 'COLORS_ORDER') {
-        const target = ballOn[0];
-        const targetPotted = Boolean(target && pottedNonCue.includes(target));
-        const scored = target && targetPotted ? COLOR_VALUES[target] || 0 : 0;
-        const freeBallScore = freeBallPotted && target && !targetPotted ? COLOR_VALUES[target] || 0 : 0;
-        if (scored || freeBallScore) {
-          scores[state.activePlayer] += scored + freeBallScore;
-          nextBreak = (state.currentBreak ?? 0) + scored + freeBallScore;
-        }
-        if (target && targetPotted) {
-          colorsRemaining.shift();
-          if (!colorsRemaining.length) {
-            frameOver = true;
-            const aScore = scores.A;
-            const bScore = scores.B;
-            winner = aScore === bScore ? 'TIE' : aScore > bScore ? 'A' : 'B';
-          }
+      let gained = 0;
+      for (const color of pottedNonCue) {
+        if (isScoringBall(color)) {
+          gained += COLOR_VALUES[color];
         }
       }
+      state.players[state.activePlayer].score += gained;
+      state.currentBreak += gained;
     }
 
-    if (!foulReason && pottedNonCue.length) {
-      nextActivePlayer = state.activePlayer;
-    }
-
-    const nextState: FrameState = {
-      ...state,
-      activePlayer: nextActivePlayer,
-      players: {
-        A: { ...state.players.A, score: scores.A },
-        B: { ...state.players.B, score: scores.B }
-      },
-      currentBreak: nextBreak,
-      phase: nextPhase,
-      redsRemaining,
-      colorOnAfterRed,
-      freeBall: nextFreeBall,
-      ballOn: resolveBallOn({ ...state, phase: nextPhase, colorOnAfterRed }, colorsRemaining),
-      frameOver,
-      winner,
-      foul: foulReason
-        ? {
-          points: calculateFoulPoints(
-              foulBallOn,
-              [firstContact, explicitFoul?.ball, ...pottedNonCue].filter(Boolean) as BallColor[]
-            ),
-            reason: foulReason
-          }
-        : undefined,
-      meta: {
-        variant: 'snooker',
-        colorsRemaining,
-        freeBall: nextFreeBall,
-        hud: buildHud(
-          { ...state, phase: nextPhase, colorOnAfterRed, ballOn, redsRemaining, freeBall: nextFreeBall },
-          scores,
-          resolveBallOn({ ...state, phase: nextPhase, colorOnAfterRed }, colorsRemaining)
-        )
-      } satisfies SnookerMeta
+    state.ballOn = resolveBallOn(state, colorsRemaining);
+    state.meta = {
+      variant: 'snooker',
+      colorsRemaining,
+      freeBall: false,
+      hud: buildHud(
+        state,
+        {
+          A: state.players.A.score,
+          B: state.players.B.score
+        },
+        state.ballOn
+      )
     };
 
-    return nextState;
+    return state;
   }
 }
