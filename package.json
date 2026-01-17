@@ -2,7 +2,7 @@
   "name": "tonplaygram-monorepo",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "type": "module"
   "main": "bot/server.js",
   "scripts": {
     "prestart": "npm run build",
