@@ -1,5 +1,7 @@
 import { ProxyAgent } from 'undici';
 
+export const agent = new ProxyAgent(process.env.PROXY_URL);
+
 export const proxyUrl =
   process.env.HTTPS_PROXY ||
   process.env.https_proxy ||
