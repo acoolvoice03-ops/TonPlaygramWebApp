@@ -1,7 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { proxyAgent } from './utils/proxyAgent.js';
 
-
 // Commands
 import registerStart from './commands/start.js';
 import registerMine from './commands/mine.js';
